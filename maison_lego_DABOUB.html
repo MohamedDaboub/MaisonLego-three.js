@@ -1,0 +1,1053 @@
+<!DOCTYPE HTML>
+<html lang="fr">
+<head>
+  <title>BUT MMI - Modélisation algorithmique 1</title>
+  <meta name="author" content="Mohamed Daboub">
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" href="images/icon.png" />
+    <style>
+      body {
+        margin: 0px;
+        padding: 0px;
+        background-color: #777777;
+      }
+      #canvas {
+        display : block;
+        position:absolute;
+        left:10px;
+        right:440px;
+        top:10px;
+        bottom : 10px;
+        background-color: #000000;
+      }
+      #info {
+        display : block;
+        position : absolute;
+        width : 400px;
+        bottom : 10px;
+        top : 10px;
+        right : 10px;
+        background-color: #EEEEEE;
+        border : 2px solid white;
+        padding : 5px;
+        font-size:14pt;
+        font-family:times new roman;
+        font-weight:bold;
+        font-style:italic;
+        color:black;
+      }
+      input {
+        background-color: #FFFFFF;
+        border: none;
+        width: 20px;
+        color:black;
+        font-size:14pt;
+        font-family:times new roman;
+        font-weight:bold;
+      }
+    </style>
+</head>
+<body>
+  <div id="canvas"></div>
+  <div id="info">
+    <p>Mon terrain s'étend sur <input id="fieldX" />x<input id="fieldY" /> u²,
+      il est cloturé d'un mur de <input id="fenceH" /> u de haut,
+      avec un portail à l'abcisse <input id="gateX" />u.</br>
+      Ma maison a comme dimensions : <input id="houseW" /> u x
+      <input id="houseH" /> u, elle est placée en (<input id="houseX" />,<input id="houseY" />). Elle a :</p>
+    <ul><li>Une porte en façade à <input id="doorX" /> u du pignon gauche.</li>
+      <li>Une fenêtre en façade à <input id="window1X" /> u du pignon gauche.</li>
+      <li>Une fenêtre sur le pignon de gauche à <input id="window2Y" /> u de la façade.</li>
+    </ul>
+    <br />
+      <table border="0">
+        <tr><td align="right"><img src="images/b1.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textB1"/></td>
+        <td align="right"><img src="images/b2.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textB2"/></td></tr>
+        <tr><td align="right"><img src="images/b4.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textB4"/></td>
+        <td align="right"><img src="images/b6.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textB6"/></td></tr>
+		<tr><td align="right"><img src="images/t1.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textT1"/></td>
+        <td align="right"><img src="images/t2.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textT2"/></td></tr>
+		<tr><td align="right"><img src="images/t3.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textT3"/></td>
+        <td align="right"><img src="images/t4.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textT4"/></td></tr>
+		<tr><td align="right"><img src="images/tA.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textTA"/></td>
+        <td align="right"><img src="images/P2.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textP2"/></td></tr>
+		<tr><td align="right"><img src="images/P3.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textP3"/></td>
+        <td align="right"><img src="images/P4.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textP4"/></td></tr>
+		<tr><td align="right"><img src="images/P6.png" height="48"/></td><td>x</td><td><input disabled="disabled" class="info" value="0" id="textP6"/></td>
+        <td align="right"></td></tr>
+      </table>
+    <input type="checkbox" id="showBB">Afficher les ouvertures.
+    <br>
+    Replay: <button id="replay"><img src="images/play.png" width="32" /></button>
+  </div>
+  <script type="module">
+    import * as THREE from '../three.js-dev/build/three.module.js';
+    import { OrbitControls } from '../three.js-dev/examples/jsm/controls/OrbitControls.js';
+    import { ColladaLoader } from '../three.js-dev/examples/jsm/loaders/ColladaLoader.js';
+
+
+    // variables utilisées par les deux fonctions
+    var renderer, camera, scene, controls, repere;
+    var animations = []; // tableau des animations
+    const raycaster = new THREE.Raycaster();
+    var clock = new THREE.Clock();
+    var BBs = [];
+    var u = 8;
+    var v = 9.6;
+    var brique1, brique2, brique4, brique6, door, win, 
+      // les variables qui ont etait ajouté par moi pour les toits et les plaques 
+    toit1, toit2, toit3, toit4, toitangle2, plaque1, plaque2, plaque2x1, plaque3, plaque3x1;
+    var parameters = {'fieldX': 31, 'fieldY': 20, 'fenceH': 2, 'houseX': 6, 'houseY': 2,
+      'houseW': 22, 'houseH': 11, 'doorX': 5, 'window1X': 12, 'window2Y': 2, 'gateX': 6
+    };
+    var SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_LEFT, SCREEN_TOP;
+    var clickInfo = [];
+    function onClickEvent(event) {
+      clickInfo.userHasClicked = true;
+      clickInfo.mouse = new THREE.Vector2();
+      clickInfo.mouse.x = ((event.clientX - SCREEN_LEFT) / SCREEN_WIDTH) * 2 - 1;
+      clickInfo.mouse.y = -((event.clientY - SCREEN_TOP) / SCREEN_HEIGHT) * 2 + 1;
+    }
+    function start() {
+      for (var param in parameters) {
+        let obj = document.getElementById(param);
+        obj.value = parameters[param];
+        obj.addEventListener('change', (event) => { parameters[obj.id] = parseInt(obj.value); generate(); });
+      }
+      //document.getElementById('replay').addEventListener('click',(event)=>{step=1;});
+
+      // initialisation du moteur de rendu
+      renderer = new THREE.WebGLRenderer();
+      // création d'un canvas dans un div
+      renderer.setClearColor(0x222222, 1);
+      var container = document.getElementById("canvas");
+
+
+      var w = container.offsetWidth;
+      var h = container.offsetHeight;
+    // [4] set dimension de la fenetres
+      SCREEN_WIDTH = container.scrollWidth;
+      SCREEN_HEIGHT = container.scrollHeight;
+      SCREEN_LEFT = container.offsetLeft - container.scrollLeft + container.clientLeft;
+      SCREEN_TOP = container.offsetTop - container.scrollTop + container.clientTop;
+      renderer.setSize(w, h);
+      container.appendChild(renderer.domElement);
+    // [2] gestion du clic sur la fenetre 3d
+      container.addEventListener('click', onClickEvent, false);
+      // création d'une caméra perspective(angle d'ouverture, rapport largeur/hauteur, near, far)
+      camera = new THREE.PerspectiveCamera(25, w / h, 1, 6000);
+      camera.position.set(200, 350, 350);
+      camera.lookAt(new THREE.Vector3(0, 0, 5 * v));
+      camera.up.set(0, 0, 1);
+      controls = new OrbitControls(camera, renderer.domElement);
+      // création de la scène
+      scene = new THREE.Scene();
+
+      clock.start();
+      var loader = new ColladaLoader();
+      loader.load('./models/pieces_lego.dae', onLoaded, onProgress, onError);
+
+      // sources de lumière (une ambiante et une ponctuelle placée en [-10;100;200])
+      var ambientLight = new THREE.AmbientLight(0x0a0a0a);
+      scene.add(ambientLight);
+      var pointLight = new THREE.PointLight(0xffffff, 1);
+      pointLight.position.set(-300, 600, 1500);
+      scene.add(pointLight);
+
+      pointLight = new THREE.PointLight(0xffffff,0.3);
+    pointLight.position.set(-300, -600, 1500);
+    scene.add(pointLight);
+    }
+
+    function onLoaded(collada) {
+      let object = collada.scene;
+      repere = object.getObjectByName("repere");
+
+      brique1 = object.getObjectByName("brique1x1");
+      brique2 = object.getObjectByName("brique2x1");
+      brique4 = object.getObjectByName("brique4x1");
+      brique6 = object.getObjectByName("brique6x1");
+      door = object.getObjectByName("porte");
+      win = object.getObjectByName("fenetre");
+
+      // objet ajouté type toit et fleur
+      toit1 = object.getObjectByName("toit1x2");
+      toit2 = object.getObjectByName("toit2x2");
+      toit3 = object.getObjectByName("toit3x2");
+      toit4 = object.getObjectByName("toit4x2");
+      toitangle2 = object.getObjectByName("toitAngle2x2");
+      // fleur = object.getObjectByName("fleur");
+      plaque1 = object.getObjectByName("plaque1x1");
+      plaque2x1 = object.getObjectByName("plaque2x1");
+      plaque2 = object.getObjectByName("plaque2x2");
+      plaque3x1 = object.getObjectByName("plaque3x1");
+      plaque3 = object.getObjectByName("plaque3x2");
+
+      let battant = object.getObjectByName("battant");
+      battant.animationStatus = 0
+      battant.isOpen = false; 
+      battant.onClick = function (intersection) {
+        // if (this.isOpen) {
+        //   this.rotation.z = THREE.Math.degToRad(90);
+        //   this.isOpen = false;
+        // } else {
+        //   this.rotation.z = THREE.Math.degToRad(180);
+        //   this.isOpen = true;
+        // }
+        this.animationStatus = 3;
+        // je fais tourner le battant
+      }
+      battant.amax = THREE.Math.degToRad(180);
+      battant.amin = THREE.Math.degToRad(90);
+      battant.duration = 2.0;
+      battant.updateAnimation = function (dt) {
+        // angle : la variation d'angle en dt seconde
+        let angle = dt * (this.amax - this.amin) / (this.duration);
+        switch (this.animationStatus) {
+          case 1:
+            this.rotation.z -= angle; // réduit l'angle de cadre de 'angle'
+            if (this.rotation.z < this.amin) { // si il atteint le mini
+              this.rotation.z = this.amin;
+              this.animationStatus = 0; // on change le status
+            }
+            break;
+          case 3:
+            this.rotation.z += angle; // augmente l'angle de cadre de 'angle'
+            if (this.rotation.z > this.amax) { // si on atteint le maxi
+              this.rotation.z = this.amax;
+              this.animationStatus = 1; // on change le status
+            }
+            break;
+        }
+      }
+      let dt = clock.getElapsedTime();
+    console.log("Loading completed after "+dt+" s."); 
+    // battant.updateAnimation= function(dt){};
+      animations.push(battant);
+      generate();
+
+    }
+    var onProgress = function (data) {
+      if (data.lengthComputable) {
+        var percentComplete = data.loaded / data.total * 100;
+        console.log(Math.round(percentComplete, 2) + '% downloaded');
+      }
+    };
+
+    var onError = function (data) {
+      console.error(data);
+    };
+
+    var t = 0;
+    function animate() {
+      // rendering of the scene from camera
+      renderer.render(scene, camera);
+      	// if the 3D model is loaded
+        /*if (repere!==undefined ) { 
+          // generate(); // draw 
+        }*/
+      // détection du picking
+      if (clickInfo.userHasClicked) {
+        console.log(
+          "(" + parseInt(0.5 * (clickInfo.mouse.x + 1) * SCREEN_WIDTH + SCREEN_LEFT) +
+          ";" + parseInt(-0.5 * (clickInfo.mouse.y - 1) * SCREEN_HEIGHT + SCREEN_TOP) + ")");
+        clickInfo.userHasClicked = false; // pret pour le clique suivant
+        raycaster.setFromCamera(clickInfo.mouse, camera);
+        let intersections = raycaster.intersectObjects(scene.children, true);
+        let obj = null;
+        if (intersections.length > 0) {
+          obj = intersections[0].object; // l'objet de la premiere intersection
+          // si l'objet à un nom vide alors on sélectionne son pere
+          while (obj != null && obj.name == "") { // cherche le nom du parent
+            obj = obj.parent;
+          }
+          console.log(obj.name + " uv= (" +
+            intersections[0].uv.x.toFixed(2) + "," +
+            intersections[0].uv.y.toFixed(2) + ")");
+          if (obj) { // Lance la fonction onclick sur l'objet cliqué
+            animations.forEach(object => {
+              if (object.name == obj.name) {
+                object.onClick(intersections[0]);
+              }
+            });
+          }
+        }
+      }
+
+      let dt = clock.getDelta();
+      animations.forEach(object => { // mettre à jour l'animation sur tous les objects cliquables
+        object.updateAnimation(dt);
+      });
+      // if the 3D model is loaded
+      if (repere !== undefined) {
+        // generate(); // draw 
+      }
+      // restart next frame
+      requestAnimationFrame(function () { animate(); });
+    }
+
+    function generate() {
+      BBs = [];
+      BBs[0] = new BoundingBox(parameters['gateX'], parameters['fieldY'] - 2, 0, 4, 3, parameters['fenceH']);
+      BBs[0].models = undefined;
+      // BBs[1] = new BoundingBox(parameters['fieldX'] - parameters['gateX'] - 4, parameters['fieldY'] - 2, 0, 4, 3, parameters['fenceH']);
+      // BBs[1].models = undefined;
+      BBs[1] = new BoundingBox(parameters['houseX'] + parameters['doorX'], parameters['houseY'] + parameters['houseH'] - 2, 0, 4, 3, 5);
+      BBs[1].model = door;
+      BBs[1].model.position.set(BBs[1].A.x + 0.5 * u, BBs[1].A.y + 1.5 * u, BBs[1].A.z);
+      BBs[2] = new BoundingBox(parameters['houseX'] + parameters['window1X'], parameters['houseY'] + parameters['houseH'] - 2, 2, 4, 3, 3);
+      BBs[2].model = win.clone();
+      BBs[2].model.position.set(BBs[2].A.x + 0.5 * u, BBs[2].A.y + 1.5 * u, BBs[2].A.z);
+      BBs[3] = new BoundingBox(parameters['houseX'] - 1, parameters['houseY'] + parameters['houseH'] - parameters['window2Y'] - 4, 2, 3, 4, 3);
+      BBs[3].model = win.clone();
+      BBs[3].model.position.set(BBs[3].A.x + 1.5 * u, BBs[3].A.y + 0.5 * u, BBs[3].A.z);
+      BBs[3].model.rotation.z = Math.PI / 2.0;
+
+      // Fenêtre coté gauche
+      BBs[4] = new BoundingBox(parameters['houseX'] + parameters['houseW'] - 2, parameters['houseY'] + parameters['houseH'] - 8, 2, 3, 4, 3);
+      BBs[4].model = win.clone();
+      BBs[4].model.position.set(BBs[4].A.x + 1.5 * u, BBs[4].A.y + 3.5 * u, BBs[4].A.z);
+      BBs[4].model.rotation.z = -Math.PI / 2;
+      // Fenêtre coté derrière
+      /*
+      if (parameters['houseW'] > 12) {
+        BBs[5] = new BoundingBox(parameters['houseX'] + parameters['houseY']+2, parameters['houseX']-4 + parameters['houseX'] - 7,2, 4, 4, 3);
+        BBs[5].model = win.clone();
+        BBs[5].model.position.set(BBs[5].A.x + 0.5 * u, BBs[5].A.y + 1.5 * u, BBs[5].A.z);
+      }
+      if (parameters['houseW'] > 18) {
+        BBs[6] = new BoundingBox(parameters['houseX'] + parameters['houseY']+8, parameters['houseX']-4 + parameters['houseX'] - 7,2, 4, 4, 3);
+        BBs[6].model = win.clone();
+        BBs[6].model.position.set(BBs[6].A.x + 0.5 * u, BBs[6].A.y + 1.5 * u, BBs[6].A.z);
+      }
+      if (parameters['houseW'] > 24){
+        BBs[7] = new BoundingBox(parameters['houseX'] + parameters['houseY']+14, parameters['houseX']-4 + parameters['houseX'] - 7,2, 4, 4, 3);
+        BBs[7].model = win.clone();
+        BBs[7].model.position.set(BBs[7].A.x + 0.5 * u, BBs[7].A.y + 1.5 * u, BBs[7].A.z);
+      }
+      if (parameters['houseW'] > 30){
+        BBs[8] = new BoundingBox(parameters['houseX'] + parameters['houseY']+20, parameters['houseX']-4 + parameters['houseX'] - 7,2, 4, 4, 3);
+        BBs[8].model = win.clone();
+        BBs[8].model.position.set(BBs[8].A.x + 0.5 * u, BBs[8].A.y + 1.5 * u, BBs[8].A.z);
+      }*/
+      function createBoundingBox(index, offsetX, offsetY, widthThreshold) {
+      if (parameters['houseW'] > widthThreshold) {
+        BBs[index] = new BoundingBox(parameters['houseX'] + parameters['houseY'] + offsetX, parameters['houseX'] - 4 + parameters['houseX'] - 7, 2, 4, 4, 3);
+        BBs[index].model = win.clone();
+        BBs[index].model.position.set(BBs[index].A.x + 0.5 * u, BBs[index].A.y + 1.5 * u, BBs[index].A.z);
+          }
+        }
+      createBoundingBox(5, 2, 0, 12);
+      createBoundingBox(6, 8, 0, 18);
+      createBoundingBox(7, 14, 0, 24);
+      createBoundingBox(8, 20, 0, 30);
+
+      brique1.copies = 0;
+      brique2.copies = 0;
+      brique4.copies = 0;
+      brique6.copies = 0;
+      toit1.copies = 0;
+      toit2.copies = 0;
+      toit3.copies = 0;
+      toit4.copies = 0;
+      toitangle2.copies = 0;
+      plaque1.copies = 0;
+      plaque2x1.copies = 0;
+      plaque2.copies = 0;
+      plaque3x1.copies = 0;
+      plaque3.copies = 0;
+
+
+
+      var old = scene.getObjectByName("parent");
+      if (old) {
+        scene.remove(old);
+      }
+
+      var parent = new THREE.Mesh();
+      parent.name = "parent";
+      scene.add(parent);
+
+      var ground = myGround(parameters['fieldX'], parameters['fieldY']);
+      parent.add(ground);
+      ground.add(repere);
+
+      // myTest(ground)
+      // myLine(0,0,0,parameters['fieldX']-1,0, ground);
+      // myLine(parameters['fieldX']-1,0,0, parameters['fieldY']-1,1,ground);
+      // myLine(parameters['fieldX']-1,parameters['fieldY']-1,0, parameters['fieldX']-1,2,ground);
+      // myLine(0,parameters['fieldY']-1,0, parameters['fieldY']-1,3,ground);
+
+      // for (var i =1; i <=16; i++) {
+      // myLine ( 0 , i , 0 , i , 0 , ground ) ;
+      // } 
+
+      // for (var i =1; i <=16; i++) {
+      //   myLine ( 0 , i , 0 , i , 0 , ground ) ;
+      //   myLine ( 16 , i ,0 ,17 - i , 2 , ground ) ;
+      //   myLine ( i , 1 , 1 , i , 1 , ground ) ;
+      //   myLine ( i -1 ,16 ,1 ,17 - i , 3 , ground ) ;
+      // }
+
+      // myLine(3,4,0,33,0,ground);
+
+
+      myFence(parameters['fieldX'], parameters['fieldY'], parameters['fenceH'], ground);
+      myHouse(parameters['houseX'], parameters['houseY'], parameters['houseW'], parameters['houseH'], 6, ground);
+      myRoof(parameters['houseX'], parameters['houseY'], parameters['houseW'], parameters['houseH'], 6, ground);
+
+      if (document.getElementById('showBB').checked) {
+        BBs.forEach(function (BB) { ground.add(BB.getBox()); });
+      }
+
+      for (let i = 0; i < BBs.length; i++) {
+        if (BBs[i]) {
+          ground.add(BBs[i].model);
+        }
+      }
+
+      document.getElementById("textB1").value = brique1.copies;
+      document.getElementById("textB2").value = brique2.copies;
+      document.getElementById("textB4").value = brique4.copies;
+      document.getElementById("textB6").value = brique6.copies;
+      document.getElementById("textT1").value = toit1.copies;
+      document.getElementById("textT2").value = toit2.copies;
+      document.getElementById("textT3").value = toit3.copies;
+      document.getElementById("textT4").value = toit4.copies;
+      document.getElementById("textTA").value = toitangle2.copies;
+      document.getElementById("textP4").value = plaque2.copies;
+      document.getElementById("textP2").value = plaque2x1.copies;
+      document.getElementById("textP6").value = plaque3.copies;
+      document.getElementById("textP3").value = plaque3x1.copies;
+
+    }
+
+    function myCutLine(ix0, iy0, iz0, w, dir, parent) {
+      // quelle est l'abscisse de l'intertersection avec la boite la plus proche ?
+      let imin = 0;
+      let dimin = BBs[imin].posInLine(ix0, iy0, iz0, w, dir);
+      for (let i = 1; i < BBs.length; i++) {
+        let di = BBs[i].posInLine(ix0, iy0, iz0, w, dir);
+        if (di != -1 && (dimin == -1 || di < dimin)) {
+          imin = i;
+          dimin = di;
+        }
+      }
+      // quelle est l'abscisse de l'intertersection avec la boite la plus proche
+      if (dimin != -1) { 
+        myLine(ix0, iy0, iz0, dimin, dir, parent);
+        switch (dir) {
+          case 0: 
+          // myCutLine(ix0 + L1+BBs[0].dx,iy0,iz0,w-L1-BBs[0].dx,dir,parent)
+          myCutLine(ix0 + w - 1, iy0, iz0, w - dimin - BBs[imin].dx, 2, parent);
+            break;
+          case 1: 
+          // myCutLine(ix0 + L1+BBs[0].dx,iy0,iz0,w-L1-BBs[0].dx,dir,parent)
+          myCutLine(ix0, iy0 + w - 1, iz0, w - dimin - BBs[imin].dy, 3, parent);
+            break;
+          case 2: 
+          // myCutLine(ix0 - L1-BBs[0].dx,iy0,iz0,w-L1-BBs[0].dx,dir,parent)
+          myCutLine(ix0 - w + 1, iy0, iz0, w - dimin - BBs[imin].dx, 0, parent);
+            break;
+          case 3: 
+          // myCutLine(ix0 - L1-BBs[0].dx,iy0,iz0,w-L1-BBs[0].dx,dir,parent)
+          myCutLine(ix0, iy0 - w + 1, iz0, w - dimin - BBs[imin].dy, 1, parent);
+            break;
+        }
+      } else {
+        myLine(ix0, iy0, iz0, w, dir, parent);
+      }
+    }
+
+    function myLine(ix0, iy0, iz0, w, dir, parent) {
+      // si il ya intersection entre la ligne et la premiere boite englobante, alors on quitte la fonction
+      var base = new THREE.Mesh();
+      let n6 = parseInt(w / 6);
+
+      // ajouter les N6 briques a la base a la bonne position
+      console.log(n6)
+      let x = 0;
+      // boucle for ?
+      // for (let i=0; i<n6; i++) {
+        
+      //   let b6 = brique6.clone();
+      //   b6.position.set(x,iy0*u,iz0*v);
+      //   x+= 6*u
+      //   base.add(b6);
+      // }
+      // boucle while ?
+
+      while (w >= 6) {
+        let b6 = brique6.clone();
+        b6.position.set(x, 0, 0)
+        brique6.copies++;
+        x += 6 * u
+        base.add(b6)
+        w -= 6
+      }
+      // dout-on ajouter une brique de 4 ?
+      // w-=n6*6;  // combien il reste apres la bricque de 6
+      if (w >= 4) {
+        let b4 = brique4.clone();
+        b4.position.set(x, 0, 0)
+        brique4.copies++;
+        x += 4 * u;
+        base.add(b4)
+        w -= 4;
+      }
+      // let n4 = parseInt((w-n6*6)/4); ca marche mais c'est plus compliqué
+      // dout-on ajouter une brique de 2 ?
+      if (w >= 2) {
+        let b2 = brique2.clone();
+        b2.position.set(x, 0, 0)
+        brique2.copies++;
+        x += 2 * u;
+        base.add(b2)
+        w -= 2
+      }
+      // dout-on ajouter une brique de 1 ?
+      if (w == 1) {
+        let b1 = brique1.clone();
+        b1.position.set(x, 0, 0)
+        brique1.copies++;
+        x += 1 * u;
+        base.add(b1)
+        w -= 2
+      }
+
+      /* GESTION DE LA DIRECTION DE LA LIGNE dir*/
+      /*0 : le long de x*/
+      /*1 : le long de y*/
+      /*2 : le long de -x*/
+      /*3 : le long de -y*/
+      base.position.set(ix0 * u, iy0 * u, iz0 * v);
+     /* if (dir==1){
+        base.rotation.z= THREE.Math.degToRad(90);
+      }else if (dir==2){
+        base.rotation.z= THREE.Math.degToRad(180);
+      }
+    else if (dir==3){
+        base.rotation.z= THREE.Math.degToRad(270);
+      }*/
+
+      switch (dir) {
+        case 0: base.rotation.z = THREE.Math.degToRad(0);
+          break
+        case 1: base.rotation.z = THREE.Math.degToRad(90);
+          break
+        case 2: base.rotation.z = THREE.Math.degToRad(180);
+          break
+        case 3: base.rotation.z = THREE.Math.degToRad(-90);
+          break
+        default:
+          console.log("Mauvaise valeur de de w")
+      }
+      parent.add(base);
+    }
+
+    function myGround(lx, ly) {
+      var base = new THREE.Mesh();
+      base.position.set(-lx * 4, -ly * 4)
+
+      let socle = new THREE.Mesh(
+        // new THREE.BoxGeometry(lx*u,ly*u,1, 1, 1, 1),
+        new THREE.BoxGeometry(lx * 8, ly * 8, 3.2),
+        new THREE.MeshPhongMaterial({ color: '#00ff00', specular: '#ffffff', shininess: 1000 }));
+      socle.position.set(lx * 4 - 4, ly * 4 - 4, -1.6);
+      base.add(socle);
+      for (let iy = 0; iy < ly; iy++) {
+        for (let ix = 0; ix < lx; ix++) {
+          let pointe = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.4, 2.4, 1.6, 12, 1),
+            new THREE.MeshPhongMaterial({ color: '#00ff00', specular: '#ffffff', shininess: 1 }));
+          pointe.position.set(-4 * lx + 4 + ix * 8, -4 * ly + 4 + iy * 8, 1.6 + 0.8)
+          pointe.rotation.x = -Math.PI / 2;// THREE.Math.degToRad(-90);
+
+          socle.add(pointe)
+        }
+      }
+
+      return base;
+    }
+
+
+    /*function myTest(parent) {
+      let test = new THREE.Mesh();
+      let b6 = brique6.clone();
+      b6.position.set(u * 0, u * 0, v * 0)
+      test.add(b6)
+
+      let b1 = brique1.clone();
+      b1.position.set(0 * u, 0 * u, 1 * v);
+      test.add(b1);
+
+      let b4 = brique4.clone();
+      b4.position.set(1 * u, 0 * u, 1 * v);
+      test.add(b4);
+
+      let b2 = brique2.clone();
+      b2.position.set(0 * u, 0 * u, 2 * v);
+      test.add(b2);
+
+
+      parent.add(test);
+    }*/
+
+
+    function myFence(lx, ly, z, parent) {
+      let fence = new THREE.Mesh();
+      for (let i = 0; i < z; i++) {
+        if (i % 2 == 0) {
+          turnLeft(lx, ly, 0, 0, i, fence);
+        }
+        else {
+          turnRight(lx, ly, 0, 0, i, fence);
+        }
+      }
+      parent.add(fence);
+    }
+        /*function onClickEvent(event){
+      ClickInfo.userHasClicked=true;
+      ClickInfo.mous=true;
+    }*/
+    function turnLeft(lx, ly, x, y, z, fence) {
+
+      let nextx = 0, nexty = 0, nextLen = lx - 1;
+    // premiere ligne
+      if ((lx - 1) % 2 == 0) {
+        myCutLine(x, y, z, lx - 1, 0, fence);
+        nextx = lx - 1;
+        nexty = 0;
+        nextLen = ly - 1;
+      } else {
+        myCutLine(x, y, z, lx, 0, fence);
+        nextx = lx - 1;
+        nexty = 1;
+        nextLen = ly - 2;
+      }
+    // deuxieme ligne
+      if (nextLen % 2 == 0) {
+        myCutLine(x + nextx, y + nexty, z, nextLen, 1, fence);
+        nexty = ly - 1;
+        nextLen = lx - 1;
+      } else {
+        myCutLine(x + nextx, y + nexty, z, nextLen + 1, 1, fence);
+        nextx = lx - 2;
+        nexty = ly - 1;
+        nextLen = lx - 2;
+      }
+    // troisieme ligne
+      if (nextLen % 2 == 0) {
+        myCutLine(x + nextx, y + nexty, z, nextLen, 2, fence);
+        nextx = 0;
+        nexty = ly - 1;
+        nextLen = ly - 1;
+      } else {
+        myCutLine(x + nextx, y + nexty, z, nextLen + 1, 2, fence);
+        nextx = 0;
+        nexty = ly - 2;
+        nextLen = ly - 2;
+      }
+    // quatrieme ligne
+      myCutLine(x + nextx, y + nexty, z, nextLen, 3, fence);
+
+    }
+
+    function turnRight(lx, ly, x, y, z, fence) {
+      let nextx = 0, nexty = 0, nextLen = ly - 1;
+      // la ligne le long de +y
+      if (nextLen % 2 == 0) {
+        myCutLine(x + nextx, y + nexty, z, nextLen, 1, fence);
+        nexty = ly - 1;
+        nextLen = lx - 1;
+      } else {
+        myCutLine(x + nextx, y + nexty, z, nextLen + 1, 1, fence);
+        nextx = 1;
+        nexty = ly - 1;
+        nextLen = lx - 2;
+      }
+      // la ligne le long de +x
+      if (nextLen % 2 == 0) { // la longueur de mon coté est pair
+        myCutLine(x + nextx, y + nexty, z, nextLen, 0, fence);
+        nextx = lx - 1;
+        nextLen = ly - 1;
+      } else {
+        myCutLine(x + nextx, y + nexty, z, nextLen + 1, 0, fence);
+        nextx = lx - 1;
+        nexty = ly - 2;
+        nextLen = ly - 2;
+      }
+      // la ligne le long de -y
+      if (nextLen % 2 == 0) { // la longueur de mon coté est pair
+        myCutLine(x + nextx, y + nexty, z, nextLen, 3, fence);
+        nexty = 0;
+        nextLen = lx - 1;
+      } else {
+        myCutLine(x + nextx, y + nexty, z, nextLen + 1, 3, fence);
+        nextx = lx - 2;
+        nexty = 0;
+        nextLen = lx - 2;
+      }
+      // la ligne le long de -x (c'est toujours pair!)
+      myCutLine(x + nextx, y + nexty, z, nextLen, 2, fence);
+    }
+    function myHouse(ix, iy, lx, ly, lz, parent) {
+      let house = new THREE.Mesh();
+      for (let i = 0; i < lz; i++) {
+        if (i % 2 == 0) {
+          turnLeft(lx, ly, ix, iy, i, house);
+
+        }
+        else {
+          turnRight(lx, ly, ix, iy, i, house);
+
+        }
+      }
+      // Boucle pour le sol de la maison
+      for (let l = 0; l < ly - 1; l++) {
+        MonSol(ix + 1, iy + l, 0, lx - 2, 0, house)
+      }
+
+      parent.add(house);
+    }
+
+
+    // Sol de la maison
+    function MonSol(ix0, iy0, iz0, w, dir, parent) {
+
+      var house = new THREE.Mesh();
+      let x = 0;
+      while (w >= 1) {
+        let p1 = plaque1.clone();
+        p1.position.set(x, 0, 0)
+        plaque1.copies++;
+        x += 1 * u
+        house.add(p1)
+        w -= 1
+      }
+      house.position.set(ix0 * u, iy0 * u, iz0 * v);
+      parent.add(house);
+    }
+
+    // Fonction du Toit de la maison 
+    function myRoof(ix, iy, lx, ly, lz, parent) {
+      let roof = new THREE.Mesh();
+      for (var i = 0; (lx - 2 * i) > 1 && (ly - 2 * i) > 1; i++) {
+        turnLeftRoof((lx - 2 * i), (ly - 2 * i), ix + i, iy + i, lz + i, roof);
+        var t = i
+      }
+      if (ly <= lx) {
+        if ((ly) % 2 == 0) {
+          LineY2(ix + i, iy + i, lz + i, (lx - 2 * t), 0, roof);
+        }
+        else {
+          LineY3(ix + i, iy + i, lz + i, (lx - 2 * t), 0, roof);
+        }
+      }
+      else {
+
+        if ((lx) % 2 == 0) {
+          LineX2(ix + i, iy + i, lz + i, (ly - 2 * t), 0, roof);
+        }
+        else {
+          LineX3(ix + i, iy + i, lz + i, (ly - 2 * t), 0, roof);
+
+        }
+      }
+      parent.add(roof);
+    }
+    function myRoofLine(ix0, iy0, iz0, w, dir, parent) {
+      w--;
+
+      var base = new THREE.Mesh();
+      let n4 = parseInt(w / 4);
+
+      let x = 0;
+      let ta2 = toitangle2.clone();
+      ta2.position.set(0, 0, 0)
+      toitangle2.copies++;
+      base.add(ta2)
+      x += u;
+
+
+      while (w >= 4) {
+        let t4 = toit4.clone();
+        t4.position.set(x, 0, 0)
+        toit4.copies++;
+        x += 4 * u
+        base.add(t4)
+        w -= 4
+      }
+      if (w >= 3) {
+        let t3 = toit3.clone();
+        t3.position.set(x, 0, 0)
+        toit3.copies++;
+        x += 3 * u;
+        base.add(t3)
+        w -= 3;
+      }
+      if (w >= 2) {
+        let t2 = toit2.clone();
+        t2.position.set(x, 0, 0)
+        toit2.copies++;
+        x += 2 * u;
+        base.add(t2)
+        w -= 2
+      }
+      if (w == 1) {
+        let t1 = toit1.clone();
+        t1.position.set(x, 0, 0)
+        toit1.copies++;
+        x += 1 * u;
+        base.add(t1)
+        w -= 1
+      }
+      base.position.set(ix0 * u, iy0 * u, iz0 * v);
+
+
+      switch (dir) {
+        case 0: base.rotation.z = THREE.Math.degToRad(0);
+          break
+        case 1: base.rotation.z = THREE.Math.degToRad(90);
+          break
+        case 2: base.rotation.z = THREE.Math.degToRad(180);
+          break
+        case 3: base.rotation.z = THREE.Math.degToRad(-90);
+          break
+        default:
+          console.log("Mauvaise valeur de de w")
+      }
+
+
+      parent.add(base);
+    }
+
+    function turnLeftRoof(lx, ly, x, y, z, roof) {
+
+      let nextx = 0, nexty = 0, nextLen = lx - 1;
+      myRoofLine(x, y, z, nextLen, 0, roof);
+      nextx = lx - 1;
+      nexty = 0;
+      nextLen = ly - 1;
+
+      myRoofLine(x + nextx, y + nexty, z, nextLen, 1, roof);
+      nexty = ly - 1;
+      nextLen = lx - 1;
+
+      myRoofLine(x + nextx, y + nexty, z, nextLen, 2, roof);
+      nextx = 0;
+      nexty = ly - 1;
+      nextLen = ly - 1;
+
+      myRoofLine(x + nextx, y + nexty, z, nextLen, 3, roof);
+    }
+    // Fonction Ligne de plaque 
+    function LineY3(ix0, iy0, iz0, w, dir, parent) {
+
+      var roof = new THREE.Mesh();
+
+
+      let x = 0;//abscisse de la prochaine pièce
+
+      while (w >= 2) {
+        let p3 = plaque3.clone();
+        p3.position.set(x, 0, 0)
+        p3.rotation.z = THREE.Math.degToRad(90);
+        plaque3.copies++;
+        x += 2 * u
+        roof.add(p3)
+        w -= 2
+      }
+
+      //Ajouter une brique de 3
+      if (w >= 1) {
+        let p31 = plaque3x1.clone();
+        p31.position.set(x - u, 0, 0)
+        p31.rotation.z = THREE.Math.degToRad(90);
+        plaque3x1.copies++;
+        x += 1 * u;
+        roof.add(p31)
+        w -= 1;
+      }
+
+      roof.position.set(ix0 * u, iy0 * u - u, iz0 * v);
+
+
+      parent.add(roof);
+    }
+
+    // Fonction Ligne de plaque
+    function LineY2(ix0, iy0, iz0, w, dir, parent) {
+
+      var roof = new THREE.Mesh();
+
+      //Ajouter les n4 briques 
+      let x = 0;//abscisse de la prochaine pièce
+
+      while (w >= 2) {
+        let p2 = plaque2.clone();
+        p2.position.set(x, 0, 0)
+        p2.rotation.z = THREE.Math.degToRad(90);
+        plaque2.copies++;
+        x += 2 * u
+        roof.add(p2)
+        w -= 2
+      }
+
+      //Ajouter une brique de 3
+      if (w >= 1) {
+        let p21 = plaque2x1.clone();
+        p21.position.set(x - u, 0, 0)
+        p21.rotation.z = THREE.Math.degToRad(90);
+        plaque2x1.copies++;
+        x += 1 * u;
+        roof.add(p21)
+        w -= 1;
+      }
+
+      roof.position.set(ix0 * u, iy0 * u - u, iz0 * v);
+
+
+      parent.add(roof);
+    }
+
+    // Fonction Ligne de plaque
+    function LineX3(ix0, iy0, iz0, w, dir, parent) {
+
+      var roof = new THREE.Mesh();
+
+      //Ajouter les n4 briques à la base à la bonne position
+      let x = 0;//abscisse de la prochaine pièce
+
+      while (w >= 2) {
+        let p3 = plaque3.clone();
+        p3.position.set(x, 0, 0)
+        p3.rotation.z = THREE.Math.degToRad(90);
+        plaque3.copies++;
+        x += 2 * u
+        roof.add(p3)
+        w -= 2
+      }
+
+      //Ajouter une brique de 3
+      if (w >= 1) {
+        let p31 = plaque3x1.clone();
+        p31.position.set(x - u, 0, 0)
+        p31.rotation.z = THREE.Math.degToRad(90);
+        plaque3x1.copies++;
+        x += 1 * u;
+        roof.add(p31)
+        w -= 1;
+      }
+
+      roof.position.set(ix0 * u + u, iy0 * u, iz0 * v);
+      roof.rotation.z = THREE.Math.degToRad(90);
+
+      parent.add(roof);
+    }
+
+    // Fonction Ligne de plaque
+    function LineX2(ix0, iy0, iz0, w, dir, parent) {
+
+      var roof = new THREE.Mesh();
+
+      //Ajouter les n4 briques à la base à la bonne position
+      let x = 0;//abscisse de la prochaine pièce
+
+      while (w >= 2) {
+        let p2 = plaque2.clone();
+        p2.position.set(x, 0, 0)
+        p2.rotation.z = THREE.Math.degToRad(90);
+        plaque2.copies++;
+        x += 2 * u
+        roof.add(p2)
+        w -= 2
+      }
+
+      //Ajouter une brique de 3
+      if (w >= 1) {
+        let p21 = plaque2x1.clone();
+        p21.position.set(x - u, 0, 0)
+        p21.rotation.z = THREE.Math.degToRad(90);
+        plaque2x1.copies++;
+        x += 1 * u;
+        roof.add(p21)
+        w -= 1;
+      }
+
+      roof.position.set(ix0 * u, iy0 * u, iz0 * v);
+      roof.rotation.z = THREE.Math.degToRad(90);
+
+
+      parent.add(roof);
+    }
+
+
+    /******************************************************************************/
+    /* BOUNDING BOX ***************************************************************/
+    function BoundingBox(x0, y0, z0, dx, dy, dz) {
+        // this.A = new THREE.Vector3(x0*u,y0*u,z0*v);
+      this.A = new THREE.Vector3(x0 * 8 - 4, y0 * 8 - 4, z0 * 9.6);
+      this.B = new THREE.Vector3(this.A.x + dx * 8, this.A.y + dy * 8, this.A.z + dz * 9.6);
+      this.dx = dx;
+      this.dy = dy;
+    }
+
+    BoundingBox.prototype.getBox = function () {
+      var box = new THREE.Mesh(
+        new THREE.BoxGeometry(this.B.x - this.A.x, this.B.y - this.A.y, this.B.z - this.A.z, 1, 1, 1),
+        new THREE.MeshPhongMaterial({
+          color: '#00ffff', specular: '#ffffff', shininess: 1000, opacity: 0.5, transparent: true
+        })
+      );
+      box.position.set(0.5 * (this.B.x + this.A.x), 0.5 * (this.B.y + this.A.y), 0.5 * (this.B.z + this.A.z));
+      return box;
+    }
+
+    // retourne l'abscisse de la premiere intersection, ou -1 si aucune 
+    BoundingBox.prototype.posInLine = function (x0, y0, z0, w, dir) {
+      var z = z0 * v;
+      if (z < this.A.z || z >= this.B.z) return -1;
+      var res = -1;
+      switch (dir) {
+        case 0:
+          var x = x0 * 8 - 4;
+          var y = y0 * 8 - 4;
+          if (x < this.B.x && x + w * 8 > this.A.x && y <= this.B.y - 8 && y >= this.A.y) {
+            res = (this.A.x + 4) / 8 - x0;
+          }
+          break;
+        case 1:
+          var x = x0 * 8 - 4;
+          var y = y0 * 8 - 4;
+          if (x <= this.B.x - 8 && x >= this.A.x && y < this.B.y && y + w * 8 > this.A.y) {
+            res = (this.A.y + 4) / 8 - y0;
+          }
+          break;
+        case 2:
+          var x = x0 * 8 + 4;
+          var y = y0 * 8 - 4;
+          if (x - w * 8 < this.B.x && x > this.A.x && y <= this.B.y - 8 && y >= this.A.y) {
+            res = x0 - (this.B.x - 4) / 8;
+          }
+          break;
+        case 3:
+          var x = x0 * 8 - 4;
+          var y = y0 * 8 + 4;
+          if (x <= this.B.x - 8 && x >= this.A.x && y - w * 8 < this.B.y && y > this.A.y) {
+            res = y0 - (this.B.y - 4) / 8;
+          }
+          break;
+      }
+      return res;
+    }
+
+    /******************************************************************************/
+    /* PROGRAMME PRINCIPAL ********************************************************/
+    start();
+    animate();
+
+  </script>
+</body>
+
+</html>
